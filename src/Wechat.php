@@ -1,10 +1,9 @@
 <?php
 namespace mon\wechat;
 
-use Laf\util\Http;
-use Laf\util\Strs;
-use Laf\util\Comm;
-use mon\factory\Container;
+use mon\util\Common;
+use mon\client\Http;
+use mon\store\Cache;
 
 /**
  * 微信SDK工具类
@@ -17,35 +16,35 @@ class Wechat
     /**
      * AppID
      * 
-     * @var [type]
+     * @var string
      */
-    private $appid;
+    protected $appid;
 
     /**
      * 秘钥
      * 
-     * @var [type]
+     * @var string
      */
-    private $secret;
+    protected $secret;
 
     /**
      * 商户ID
      *
-     * @var [type]
+     * @var string
      */
-    private $mchid;
+    protected $mchid;
 
     /**
      * 商户API_KEY
      *
-     * @var [type]
+     * @var string
      */
-    private $mch_key;
+    protected $mch_key;
 
     /**
      * 相关接口
      *
-     * @var [type]
+     * @var array
      */
     public $api = [
         'openid'            => 'https://api.weixin.qq.com/sns/jscode2session',
@@ -61,22 +60,33 @@ class Wechat
     /**
      * 错误信息
      *
-     * @var [type]
+     * @var string
      */
     protected $error;
 
     /**
-     * 构筑方法
-     * 
-     * @param [type] $appid  [description]
-     * @param [type] $secret [description]
+     * 缓存驱动
+     *
+     * @var [type]
      */
-    public function __construct($appid, $secret, $mchid = '', $mch_key = '')
+    protected $cache;
+
+    /**
+     * 构筑方法
+     *
+     * @param string $appid     APPID
+     * @param string $secret    SECRET
+     * @param string $cachePath 缓存文件保存路径
+     * @param string $mchid     商户ID
+     * @param string $mch_key   商户KEY
+     */
+    public function __construct($appid, $secret, $cachePath = ‘’, $mchid = '', $mch_key = '')
     {
         $this->appid = $appid;
         $this->secret = $secret;
         $this->mch_key = $mch_key;
         $this->mchid = $mchid;
+        $this->cache = $this->cache ?? new Cache(['path' => $cachePath]);
     }
 
     /**
@@ -101,10 +111,10 @@ class Wechat
     public function getOpenid($code)
     {
         $data = [
-            'appid'    => $this->appid,
-            'secret' => $this->secret,
-            'grant_type' => 'authorization_code',
-            'js_code' => $code
+            'appid'         => $this->appid,
+            'secret'        => $this->secret,
+            'grant_type'    => 'authorization_code',
+            'js_code'       => $code
         ];
 
         $res = Http::excuteUrl($this->api['openid'], $data, 'get', true);
@@ -125,7 +135,7 @@ class Wechat
     public function getAccessToken()
     {
         // 先判断是否存在缓存
-        $cache = Container::get('cache')->get('access_token');
+        $cache = $this->cache->get('access_token');
         if ($cache) {
             return $cache;
         }
@@ -144,10 +154,8 @@ class Wechat
             return false;
         }
 
-        $cacheToken = Container::get('cache')->set('access_token', $res['access_token'], $res['expires_in']);
-        if (!$cacheToken) {
-            Container::get('log')->warning('Cache access_token faild, access_token => ' . $res['access_token']);
-        }
+        $cacheToken = $this->cache->set('access_token', $res['access_token'], $res['expires_in']);
+        if (!$cacheToken) { }
         return $res['access_token'];
     }
 
@@ -160,9 +168,9 @@ class Wechat
     public function getUserAccessToken($code)
     {
         $data = [
-            'appid'     => $this->appid,
-            'secret'    => $this->secret,
-            'code'      => $code,
+            'appid'      => $this->appid,
+            'secret'     => $this->secret,
+            'code'       => $code,
             'grant_type' => 'authorization_code'
         ];
 
@@ -191,13 +199,13 @@ class Wechat
     public function getJsApiTicket()
     {
         // 先判断是否存在缓存
-        $cache = Container::get('cache')->get('jsapi_ticket');
+        $cache = $this->cache->get('jsapi_ticket');
         if ($cache) {
             return $cache;
         }
 
         $data = [
-            'type'  => 'jsapi',
+            'type'          => 'jsapi',
             'access_token'  => $this->getAccessToken()
         ];
         $res =  Http::excuteUrl($this->api['jsapi_ticket'], $data, 'get', true);
@@ -207,10 +215,8 @@ class Wechat
             return false;
         }
 
-        $cacheToken = Container::get('cache')->set('ticket', $res['ticket'], $res['expires_in']);
-        if (!$cacheToken) {
-            Container::get('log')->warning('Cache jsapi ticket faild, jsapi_ticket => ' . $res['ticket']);
-        }
+        $cacheToken = $this->cache->set('ticket', $res['ticket'], $res['expires_in']);
+        if (!$cacheToken) { }
         return $res['ticket'];
     }
 
@@ -224,7 +230,7 @@ class Wechat
         // 获取jsapi_ticket
         $ticket = $this->getJsApiTicket();
         // 随机字符串
-        $nonce_str = Strs::randString(32);
+        $nonce_str = Common::randString(32);
         // 当前时间
         $time = time();
 
@@ -278,7 +284,7 @@ class Wechat
         //     "province":"PROVINCE"
         //     "city":"CITY",
         //     "country":"COUNTRY",
-        //     "headimgurl":       "http://thirdwx.qlogo.cn/mmopen/g3MonUZtNHkdmzicIlibx6iaFqAc56vxLSUfpb6n5WKSYVY0ChQKkiaJSgQ1dZuTOgvLLrhJbERQQ4eMsv84eavHiaiceqxibJxCfHe/46",
+        //     "headimgurl":"http://thirdwx.qlogo.cn/mmopen/g3MonUZtNHkdmzicIlibx6iaFqAc56vxLSUfpb6n5WKSYVY0ChQKkiaJSgQ1dZuTOgvLLrhJbERQQ4eMsv84eavHiaiceqxibJxCfHe/46",
         //     "privilege":[ "PRIVILEGE1" "PRIVILEGE2"     ],
         //     "unionid": "o6_bmasdasdsad6_2sgVt7hMZOPfL"
         // }
@@ -301,7 +307,7 @@ class Wechat
         }
         $url = $this->api['msg_sec_check'] . '?access_token=' . $access_token;
         $data = [
-            'content'   => $content
+            'content' => $content
         ];
         $res =  Http::excuteUrl($url, $data, 'post', true);
         if (isset($res['errcode']) && $res['errcode'] != 0) {
@@ -326,7 +332,7 @@ class Wechat
     public function jsApiPay(string $body, int $total_fee, string $order_id, string $openid, string $notify_url = '')
     {
         // 随机字符串
-        $nonce_str = Strs::randString(32);
+        $nonce_str = Common::randString(32);
         //服务器终端的ip
         $spbill_create_ip = $_SERVER['SERVER_ADDR'];
         // 统一下单
@@ -369,7 +375,7 @@ class Wechat
     public function h5Pay(string $body, int $total_fee, string $order_id, string $notify_url = '')
     {
         // 随机字符串
-        $nonce_str = Strs::randString(32);
+        $nonce_str = Common::randString(32);
         //客户终端的ip
         $spbill_create_ip = $_SERVER['REMOTE_ADDR'];
         // 统一下单
@@ -388,7 +394,7 @@ class Wechat
      * @param  string $body             内容
      * @param  int    $total_fee        价格，单位分
      * @param  string $order_id         商户订单号
-     * @param  [type] $trade_type       交易类型
+     * @param  string $trade_type       交易类型
      * @param  string $openid           用户openid
      * @param  string $nonce_str        随机字符串
      * @param  string $notify_url       回调通知路径
@@ -396,7 +402,7 @@ class Wechat
      */
     public function orders(string $spbill_create_ip, string $body, int $total_fee, string $order_id, string $trade_type, string $openid, string $nonce_str, string $notify_url)
     {
-        //这里是按照顺序的 因为下面的签名是按照(字典序)顺序 排序错误 肯定出错
+        // 这里是按照顺序的 因为下面的签名是按照(字典序)顺序 排序错误 肯定出错
         $post['appid'] = $this->appid;
         $post['body'] = $body;
         $post['mch_id'] = $this->mchid;
@@ -407,9 +413,11 @@ class Wechat
         }
         $post['out_trade_no'] = $order_id;
         $post['spbill_create_ip'] = $spbill_create_ip;
-        $post['total_fee'] = intval($total_fee);        //总金额 最低为一分钱 必须是整数
+        // 总金额, 最低为一分钱, 必须是整数
+        $post['total_fee'] = intval($total_fee);
         $post['trade_type'] = $trade_type;
-        $sign = $this->makeSign($post);              //签名
+        // 签名
+        $sign = $this->makeSign($post);
 
         $post_xml = '<xml>
                <appid>' . $this->appid . '</appid>
@@ -425,10 +433,11 @@ class Wechat
                <sign>' . $sign . '</sign>
             </xml> ';
 
-        //统一下单接口prepay_id
+        // 统一下单接口prepay_id
         $url = $this->api['prepay'];
         $xml = Http::excuteUrl($url, $post_xml, 'post');
-        $array = Comm::xml2array($xml);               //将【统一下单】api返回xml数据转换成数组，全要大写
+        // 将【统一下单】api返回xml数据转换成数组，全要大写
+        $array = Common::xml2array($xml);
         if ($array['RETURN_CODE'] == 'SUCCESS' && $array['RESULT_CODE'] == 'SUCCESS') {
             // 成功，返回结果集
             return $array;
@@ -441,18 +450,18 @@ class Wechat
     /**
      * 查询订单状态(是否已支付)
      *
-     * @param  [type] $transaction_id [description]
-     * @param  [type] $out_trade_no   [description]
-     * @return [type]                 [description]
+     * @param string $out_trade_no      系统订单号
+     * @param string $transaction_id    微信订单号
+     * @return void
      */
     public function queryOrder($out_trade_no = null, $transaction_id = null)
     {
-        $nonce_str = Strs::randString(32);
-
+        $nonce_str = Common::randString(32);
         $post['appid'] = $this->appid;
         $post['mch_id'] = $this->mchid;
-        $post['nonce_str'] = $nonce_str; //随机字符串
-        // 使用wx订单ID或自服务订单ID进行查询，优先使用系统订单号
+        // 随机字符串
+        $post['nonce_str'] = $nonce_str;
+        // 使用wx订单ID或自服务系统订单ID进行查询，优先使用系统订单号
         if (!is_null($out_trade_no)) {
             $post['out_trade_no'] = $out_trade_no;
         } else {
@@ -470,11 +479,9 @@ class Wechat
         }
         $post_xml .= '<sign>' . $sign . '</sign></xml>';
         $xml = Http::excuteUrl($this->api['query_order'], $post_xml, 'post');
-        $array = Comm::xml2array($xml);               //将【统一下单】api返回xml数据转换成数组，全要大写
-        if (
-            array_key_exists("RETURN_CODE", $array) && array_key_exists("RESULT_CODE", $array) &&
-            $array["RETURN_CODE"] == "SUCCESS" && $array["RESULT_CODE"] == "SUCCESS"
-        ) {
+        // 将【统一下单】api返回xml数据转换成数组，全要大写
+        $array = Common::xml2array($xml);
+        if (array_key_exists("RETURN_CODE", (array)$array) && array_key_exists("RESULT_CODE", (array)$array) && $array["RETURN_CODE"] == "SUCCESS" && $array["RESULT_CODE"] == "SUCCESS") {
             return true;
         }
 
@@ -489,14 +496,14 @@ class Wechat
      */
     protected function makeSign($params)
     {
-        //签名步骤一：按字典序排序数组参数
+        // 签名步骤一：按字典序排序数组参数
         ksort($params);
-        $string = $this->http_build_query($params);
-        //签名步骤二：在string后加入KEY
+        $string = http_build_query($params);
+        // 签名步骤二：在string后加入KEY
         $string = $string . "&key=" . $this->mch_key;
-        //签名步骤三：MD5加密
+        // 签名步骤三：MD5加密
         $string = md5($string);
-        //签名步骤四：所有字符转为大写
+        // 签名步骤四：所有字符转为大写
         $result = strtoupper($string);
         return $result;
     }
