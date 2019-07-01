@@ -1,4 +1,5 @@
 <?php
+
 namespace mon\wechat;
 
 use mon\util\Common;
@@ -80,7 +81,7 @@ class Wechat
      * @param string $mchid     商户ID
      * @param string $mch_key   商户KEY
      */
-    public function __construct($appid, $secret, $cachePath = ‘’, $mchid = '', $mch_key = '')
+    public function __construct($appid, $secret, $cachePath = '', $mchid = '', $mch_key = '')
     {
         $this->appid = $appid;
         $this->secret = $secret;
@@ -230,7 +231,7 @@ class Wechat
         // 获取jsapi_ticket
         $ticket = $this->getJsApiTicket();
         // 随机字符串
-        $nonce_str = Common::randString(32);
+        $nonce_str = Common::instance()->randString(32);
         // 当前时间
         $time = time();
 
@@ -332,7 +333,7 @@ class Wechat
     public function jsApiPay(string $body, int $total_fee, string $order_id, string $openid, string $notify_url = '')
     {
         // 随机字符串
-        $nonce_str = Common::randString(32);
+        $nonce_str = Common::instance()->randString(32);
         //服务器终端的ip
         $spbill_create_ip = $_SERVER['SERVER_ADDR'];
         // 统一下单
@@ -350,10 +351,10 @@ class Wechat
         $tmp['nonceStr'] = $nonce_str;
         $tmp['package'] = 'prepay_id=' . $orders['PREPAY_ID'];
         $tmp['signType'] = 'MD5';
-        $tmp['timeStamp'] = (string)$time;
+        $tmp['timeStamp'] = (string) $time;
 
         $data['state'] = 1;
-        $data['timeStamp'] = (string)$time;
+        $data['timeStamp'] = (string) $time;
         $data['nonceStr'] = $nonce_str;
         $data['signType'] = 'MD5';
         $data['package'] = 'prepay_id=' . $orders['PREPAY_ID'];
@@ -375,7 +376,7 @@ class Wechat
     public function h5Pay(string $body, int $total_fee, string $order_id, string $notify_url = '')
     {
         // 随机字符串
-        $nonce_str = Common::randString(32);
+        $nonce_str = Common::instance()->randString(32);
         //客户终端的ip
         $spbill_create_ip = $_SERVER['REMOTE_ADDR'];
         // 统一下单
@@ -437,7 +438,7 @@ class Wechat
         $url = $this->api['prepay'];
         $xml = Http::excuteUrl($url, $post_xml, 'post');
         // 将【统一下单】api返回xml数据转换成数组，全要大写
-        $array = Common::xml2array($xml);
+        $array = Common::instance()->xml2array($xml);
         if ($array['RETURN_CODE'] == 'SUCCESS' && $array['RESULT_CODE'] == 'SUCCESS') {
             // 成功，返回结果集
             return $array;
@@ -456,7 +457,7 @@ class Wechat
      */
     public function queryOrder($out_trade_no = null, $transaction_id = null)
     {
-        $nonce_str = Common::randString(32);
+        $nonce_str = Common::instance()->randString(32);
         $post['appid'] = $this->appid;
         $post['mch_id'] = $this->mchid;
         // 随机字符串
@@ -480,8 +481,8 @@ class Wechat
         $post_xml .= '<sign>' . $sign . '</sign></xml>';
         $xml = Http::excuteUrl($this->api['query_order'], $post_xml, 'post');
         // 将【统一下单】api返回xml数据转换成数组，全要大写
-        $array = Common::xml2array($xml);
-        if (array_key_exists("RETURN_CODE", (array)$array) && array_key_exists("RESULT_CODE", (array)$array) && $array["RETURN_CODE"] == "SUCCESS" && $array["RESULT_CODE"] == "SUCCESS") {
+        $array = Common::instance()->xml2array($xml);
+        if (array_key_exists("RETURN_CODE", (array) $array) && array_key_exists("RESULT_CODE", (array) $array) && $array["RETURN_CODE"] == "SUCCESS" && $array["RESULT_CODE"] == "SUCCESS") {
             return true;
         }
 
